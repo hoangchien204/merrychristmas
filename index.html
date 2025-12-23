@@ -4,17 +4,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Pink Christmas - Falling Snow</title>
+    <title>Pink Christmas - Hello</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cinzel:wght@400;700&display=swap"
+        rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; background-color: #020101; touch-action: none; }
-        canvas { display: block; outline: none; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #020101;
+            touch-action: none;
+            font-family: 'Cinzel', serif;
+        }
+
+        canvas {
+            display: block;
+            outline: none;
+        }
+
+        /* Màn hình chờ Start Screen */
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #020101;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s ease;
+        }
+
+        #helloBtn {
+            background: transparent;
+            color: #ffccdd;
+            border: 1px solid #ffccdd;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-family: 'Great Vibes', cursive;
+            cursor: pointer;
+            letter-spacing: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(255, 204, 221, 0.2);
+        }
+
+        #helloBtn:hover {
+            background: #ffccdd;
+            color: #020101;
+            box-shadow: 0 0 30px rgba(255, 204, 221, 0.5);
+        }
+
+        .hint {
+            margin-top: 20px;
+            color: #444;
+            font-size: 10px;
+            letter-spacing: 2px;
+        }
     </style>
 </head>
 
 <body>
+    <div id="startScreen">
+        <button id="helloBtn">Hello</button>
+        <div class="hint">CLICK TO START EXPERIENCE</div>
+    </div>
+
+    <audio id="bgMusic" src="./audio.mp3" loop></audio>
+
     <div style="font-family: 'Great Vibes'; opacity: 0; position: absolute; pointer-events: none;">.</div>
     <div style="font-family: 'Cinzel'; opacity: 0; position: absolute; pointer-events: none;">.</div>
 
@@ -37,140 +97,129 @@
         // --- CẤU HÌNH ---
         const CONFIG = {
             treeHeight: 75, baseRadius: 42,
-            layers: 16, branches: 8, particlesPerLayer: 3500, 
-            huePink: 0.95, hueGold: 0.11, hueGreen: 0.32,
-            
-            treeStartTimeOffset: 3.5, 
+            layers: 16, branches: 8, particlesPerLayer: 4500,
+            huePink: 0.92, hueGold: 0.11, hueGreen: 0.32,
+            treeStartTimeOffset: 3.5,
             treeCoalesceSpeed: 3.5,
-            introDuration: 7.0, 
-
+            introDuration: 7.0,
             subtitles: [
-                "Wishing you joy & happiness",
-                "May your days be merry & bright",
-                "Warmest thoughts & best wishes",
-                "Peace, love, and joy to you",
-                "Happy Holidays!"
+                "Hế nhô người đẹp",
+                "Giáng sinh vui vẻ\nnhé",
+                "Một món quà nho nhỏ\ntặng người đẹp nha",
+                "Không to tát\nnhưng mong người đẹp thích",
             ],
             subtitleSwitchTime: 3.0,
-
-            // Cấu hình Tuyết
-            snowCount: 2000, // Số lượng tuyết
-            snowRange: 1000  // Phạm vi tuyết rơi (rất rộng để bao trùm camera)
+            snowCount: 3000,
+            snowRange: 1000
         };
 
+        const DOC_PADDING_LEFT = 50;
         let scene, camera, renderer, controls, composer;
-        let contentGroup, textGroup, subtitleGroup, snowSystem; 
-        const clock = new THREE.Clock();
-        
-        // Texture
+        let contentGroup, textGroup, subtitleGroup, snowSystem;
+        let musicStarted = false;
+
+        const clock = new THREE.Clock(false); // Chưa đếm ngay
+        const music = document.getElementById('bgMusic');
+        const startScreen = document.getElementById('startScreen');
+        const helloBtn = document.getElementById('helloBtn');
+
         const particleTexture = createParticleTexture();
-        const snowflakeTexture = createSnowflakeTexture(); // [NEW] Texture bông tuyết
+        const snowflakeTexture = createSnowflakeTexture();
 
         let currentSubtitleIndex = 0;
         let lastSubtitleSwitchTime = 0;
         let activeSubtitles = [];
-
         let isIntroFinished = false;
         let targetCamPos = new THREE.Vector3();
         let targetLookAt = new THREE.Vector3();
 
-        setTimeout(() => { init(); animate(); }, 1000);
+        // Sự kiện bắt đầu
+        helloBtn.addEventListener('click', () => {
+            startScreen.style.opacity = '0';
+            setTimeout(() => {
+                startScreen.style.display = 'none';
+                clock.start(); // Bắt đầu đếm thời gian
+                init();
+                animate();
+            }, 1000);
+        });
 
-        // --- HÀM TẠO TEXTURE BÔNG TUYẾT (VẼ TAY) ---
         function createSnowflakeTexture() {
             const canvas = document.createElement('canvas');
-            const size = 128; // Canvas to hơn chút để vẽ chi tiết
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            const center = size / 2;
-
+            const size = 128; canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d'); const center = size / 2;
             ctx.clearRect(0, 0, size, size);
-            
-            // Vẽ tâm sáng tỏa ra
             const gradient = ctx.createRadialGradient(center, center, 0, center, center, size / 2);
             gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
             gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
             gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
-            ctx.fillStyle = gradient;
-            ctx.beginPath(); ctx.arc(center, center, size/2, 0, Math.PI*2); ctx.fill();
-
-            // Vẽ 6 cánh tuyết
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-
+            ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(center, center, size / 2, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
             for (let i = 0; i < 6; i++) {
-                ctx.save();
-                ctx.translate(center, center);
-                ctx.rotate(i * Math.PI / 3);
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(0, size * 0.4); // Cánh dài
-                ctx.stroke();
-                
-                // Vẽ nhánh nhỏ trên cánh
-                ctx.beginPath();
-                ctx.moveTo(0, size * 0.25);
-                ctx.lineTo(-size * 0.1, size * 0.35);
-                ctx.moveTo(0, size * 0.25);
-                ctx.lineTo(size * 0.1, size * 0.35);
-                ctx.stroke();
-                
+                ctx.save(); ctx.translate(center, center); ctx.rotate(i * Math.PI / 3);
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, size * 0.4); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, size * 0.25); ctx.lineTo(-size * 0.1, size * 0.35);
+                ctx.moveTo(0, size * 0.25); ctx.lineTo(size * 0.1, size * 0.35); ctx.stroke();
                 ctx.restore();
             }
-
             return new THREE.CanvasTexture(canvas);
         }
 
         function createParticleTexture() {
-            const canvas = document.createElement('canvas');
-            const size = 64; canvas.width = size; canvas.height = size;
-            const context = canvas.getContext('2d');
-            const center = size / 2;
+            const canvas = document.createElement('canvas'); const size = 64; canvas.width = size; canvas.height = size;
+            const context = canvas.getContext('2d'); const center = size / 2;
             context.clearRect(0, 0, size, size);
             const gradient = context.createRadialGradient(center, center, 0, center, center, size / 2);
             gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
             gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.4)');
             gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
-            context.fillStyle = gradient;
-            context.beginPath(); context.arc(center, center, size / 2, 0, Math.PI * 2); context.fill();
-            context.beginPath(); context.arc(center, center, size / 6, 0, Math.PI * 2); 
-            context.fillStyle = '#fff'; context.fill();
+            context.fillStyle = gradient; context.beginPath(); context.arc(center, center, size / 2, 0, Math.PI * 2); context.fill();
+            context.beginPath(); context.arc(center, center, size / 6, 0, Math.PI * 2); context.fillStyle = '#fff'; context.fill();
             return new THREE.CanvasTexture(canvas);
         }
 
         function createTitleMesh() {
             const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-            canvas.width = 1024; canvas.height = 256;
+            canvas.width = 1024; canvas.height = 512;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.font = 'bold 130px "Great Vibes", cursive'; 
+            ctx.textAlign = 'left';
             ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = '#ff0066'; ctx.shadowBlur = 30;
-            ctx.fillText("Merry Christmas", canvas.width / 2, canvas.height / 2);
+
+            // Xóa shadow hồng để chữ trắng sạch
+            ctx.shadowBlur = 0;
+
+            ctx.font = 'bold 120px "Great Vibes", cursive';
+            ctx.fillText("Merry", DOC_PADDING_LEFT, 150);
+            ctx.font = 'bold 120px "Great Vibes", cursive';
+            ctx.fillText("Christmas", DOC_PADDING_LEFT, 300);
+
             const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter;
             const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
-            const geo = new THREE.PlaneGeometry(160, 40);
+            const geo = new THREE.PlaneGeometry(160, 80);
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(0, 25, 0); 
+            mesh.position.set(0, 18, 0);
             return mesh;
         }
 
         function spawnSubtitle(textStr) {
             const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-            canvas.width = 1024; canvas.height = 128;
+            canvas.width = 1024; canvas.height = 256;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.font = '60px Cinzel, serif'; 
-            ctx.fillStyle = '#ffccdd'; ctx.shadowColor = '#ffccdd'; ctx.shadowBlur = 5;
-            ctx.fillText(textStr, canvas.width / 2, canvas.height / 2);
+            ctx.font = '50px "Times New Roman", serif'; ctx.fillStyle = '#ffccdd';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            const lines = textStr.split('\n');
+            const lineHeight = 70;
+            lines.forEach((line, i) => {
+                ctx.fillText(line, DOC_PADDING_LEFT, 10 + i * lineHeight);
+            });
             const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter;
             const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
-            const geo = new THREE.PlaneGeometry(140, 17.5);
+            const geo = new THREE.PlaneGeometry(160, 40);
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(0, -10, 0); 
+            mesh.position.set(0, -25, 0);
             subtitleGroup.add(mesh);
-            activeSubtitles.push({ mesh: mesh, state: 'entering', life: 0 });
+            activeSubtitles.push({ mesh, state: 'entering', life: 0 });
         }
 
         function init() {
@@ -179,23 +228,20 @@
             scene.fog = new THREE.FogExp2(0x050202, 0.001);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 3000);
-            camera.position.set(0, 100, 900); 
+            camera.position.set(0, 100, 900);
 
             renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.toneMapping = THREE.ReinhardToneMapping;
             document.body.appendChild(renderer.domElement);
 
             controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true; 
-            controls.dampingFactor = 0.05;
-            controls.autoRotate = true; 
-            controls.autoRotateSpeed = 0.5; 
-            controls.minDistance = 30; 
-            controls.maxDistance = 900; 
-            controls.maxPolarAngle = Math.PI / 2 + 0.1; 
-            controls.enabled = false; 
+            controls.enableDamping = true; controls.dampingFactor = 0.05;
+            controls.autoRotate = true; controls.autoRotateSpeed = 0.5;
+            controls.minDistance = 10; controls.maxDistance = 900;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1;
+            controls.enabled = false;
 
             contentGroup = new THREE.Group();
             scene.add(contentGroup);
@@ -204,17 +250,16 @@
             createHeart();
             createBigRipples();
             createBackgroundDust();
-            createFallingSnow(); // [NEW] Tạo hệ thống tuyết
-            
+            createFallingSnow();
+
             textGroup = new THREE.Group();
-            scene.add(textGroup); 
+            scene.add(textGroup);
 
             const titleMesh = createTitleMesh();
-            titleMesh.userData.isTitle = true; 
+            titleMesh.userData.isTitle = true;
             textGroup.add(titleMesh);
 
             subtitleGroup = new THREE.Group();
-            subtitleGroup.position.set(0, -15, 0); 
             textGroup.add(subtitleGroup);
 
             const renderScene = new RenderPass(scene, camera);
@@ -224,279 +269,170 @@
             composer.addPass(renderScene);
             composer.addPass(bloomPass);
 
-            calculateLayoutTargets(); 
+            calculateLayoutTargets();
             window.addEventListener('resize', onWindowResize);
-        }
-
-        // --- HÀM TẠO TUYẾT RƠI ---
-        function createFallingSnow() {
-            const geometry = new THREE.BufferGeometry();
-            const positions = [];
-            const velocities = []; // Tốc độ rơi riêng cho từng hạt
-
-            const range = CONFIG.snowRange; 
-
-            for (let i = 0; i < CONFIG.snowCount; i++) {
-                // Phân bố ngẫu nhiên trong không gian rất rộng
-                const x = (Math.random() - 0.5) * range;
-                const y = (Math.random() - 0.5) * range; // Cao thấp khác nhau
-                const z = (Math.random() - 0.5) * range; 
-
-                positions.push(x, y, z);
-                
-                // Tốc độ rơi: Hạt nào càng gần (z dương) thì rơi càng nhanh tạo cảm giác chiều sâu
-                // yVelocity từ 0.2 đến 0.8
-                velocities.push(0.2 + Math.random() * 0.6); 
-            }
-
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geometry.setAttribute('velocity', new THREE.Float32BufferAttribute(velocities, 1));
-
-            // Material dùng texture bông tuyết
-            const material = new THREE.PointsMaterial({
-                size: 3.5, // Kích thước đủ lớn để nhìn rõ hình dáng
-                map: snowflakeTexture,
-                transparent: true,
-                opacity: 0.8,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-            });
-
-            snowSystem = new THREE.Points(geometry, material);
-            scene.add(snowSystem); // Thêm trực tiếp vào scene, không quay theo contentGroup
         }
 
         function calculateLayoutTargets() {
             const aspect = window.innerWidth / window.innerHeight;
-            const isMobile = aspect < 1.0; 
-
+            const isMobile = aspect < 1.0;
             if (isMobile) {
-                contentGroup.position.set(0, -25, 0); 
-                textGroup.position.set(0, 45, 0); 
-                targetCamPos.set(0, 30, 450); 
-                targetLookAt.set(0, 10, 0); 
+                contentGroup.position.set(-25, -5, 0);
+                textGroup.position.set(50, 10, 0);
+                textGroup.scale.set(0.6, 0.6, 0.6);
+                targetCamPos.set(0, 10, 190);
+                targetLookAt.set(0, 5, 0);
             } else {
-                contentGroup.position.set(-30, 0, 0);
-                textGroup.position.set(65, CONFIG.treeHeight / 2, 0);
-                targetCamPos.set(0, 70, 230);
-                targetLookAt.set(0, 30, 0); 
+                contentGroup.position.set(-45, 0, 0);
+                textGroup.position.set(50, CONFIG.treeHeight / 2 - 5, 0);
+                textGroup.scale.set(1, 1, 1);
+                targetCamPos.set(0, 40, 220);
+                targetLookAt.set(0, 20, 0);
             }
         }
 
+        // --- Các hàm tạo cây, ripple, dust giữ nguyên logic ---
         function createSymmetricalTree() {
             const geometry = new THREE.BufferGeometry();
             const finalPositions = []; const initialPositions = []; const colors = []; const sizes = [];
             const colorObj = new THREE.Color();
             const anglePerBranch = (Math.PI * 2) / CONFIG.branches;
-
             for (let i = 0; i < CONFIG.layers; i++) {
                 const progress = i / (CONFIG.layers - 1);
                 const layerYBase = (progress * CONFIG.treeHeight) - (CONFIG.treeHeight / 2);
                 const currentMaxRadius = CONFIG.baseRadius * Math.pow(1 - progress, 0.5);
-                const densityMultiplier = Math.pow(1 - progress, 1.2);
-                const count = Math.floor(CONFIG.particlesPerLayer * densityMultiplier);
+                const count = Math.floor(CONFIG.particlesPerLayer * Math.pow(1 - progress, 1.2));
                 const layerOffset = (i % 2) * (anglePerBranch / 2) + (i * 0.1);
-
                 for (let j = 0; j < count; j++) {
                     const branchID = Math.floor(Math.random() * CONFIG.branches);
                     const finalAngle = branchID * anglePerBranch + (Math.random() - 0.5) * anglePerBranch * (0.4 + progress * 0.2) + layerOffset;
                     const rRatio = Math.sqrt(Math.random());
                     const r = currentMaxRadius * rRatio;
                     let y = layerYBase - (r * 0.6) - (rRatio * (1 - progress) * 4.0);
-                    y += (Math.random() - 0.5) * 2.0;
-                    finalPositions.push(r * Math.cos(finalAngle), y, r * Math.sin(finalAngle));
-
-                    const startRadius = 250 + Math.random() * 350; 
-                    const startAngle = Math.random() * Math.PI * 2;
-                    const startY = (Math.random() - 0.5) * 300;
-                    initialPositions.push(startRadius * Math.cos(startAngle), startY, startRadius * Math.sin(startAngle));
-
-                    const mixSelector = Math.random(); let hue, saturation, lightness, size;
-                    if (mixSelector < 0.6) hue = CONFIG.huePink;
-                    else if (mixSelector < 0.85) hue = CONFIG.hueGreen;
-                    else hue = CONFIG.hueGold;
-
-                    if (rRatio > 0.9) { saturation = 0.85; lightness = (hue === CONFIG.hueGold) ? 0.7 : 0.8; size = Math.random() * 0.9 + 0.6; } 
-                    else if (rRatio < 0.35) { saturation = 1.0; lightness = (hue === CONFIG.hueGreen) ? 0.25 : 0.35; size = Math.random() * 0.5 + 0.3; } 
-                    else { saturation = 0.9; lightness = 0.4 + rRatio * 0.25; if (hue === CONFIG.hueGreen) lightness -= 0.1; size = Math.random() * 0.7 + 0.5; }
-                    colorObj.setHSL(hue, saturation, lightness); colors.push(colorObj.r, colorObj.g, colorObj.b); sizes.push(size);
+                    finalPositions.push(r * Math.cos(finalAngle), y + (Math.random() - 0.5) * 2.0, r * Math.sin(finalAngle));
+                    const startRadius = 250 + Math.random() * 350; const startAngle = Math.random() * Math.PI * 2;
+                    initialPositions.push(startRadius * Math.cos(startAngle), (Math.random() - 0.5) * 300, startRadius * Math.sin(startAngle));
+                    const mix = Math.random();
+                    let h = (mix < 0.65) ? CONFIG.huePink : (mix < 0.85 ? CONFIG.hueGold : CONFIG.hueGreen);
+                    colorObj.setHSL(h, 0.9, 0.5); colors.push(colorObj.r, colorObj.g, colorObj.b);
+                    sizes.push(Math.random() * 0.7 + 0.4);
                 }
             }
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(finalPositions, 3));
             geometry.setAttribute('initialPosition', new THREE.Float32BufferAttribute(initialPositions, 3));
             geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
             geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
-
             const material = new THREE.ShaderMaterial({
                 uniforms: { pointTexture: { value: particleTexture }, time: { value: 0 }, uProgress: { value: 0.0 } },
-                vertexShader: `
-                    attribute float size; attribute vec3 color; attribute vec3 initialPosition;
-                    varying vec3 vColor; uniform float time; uniform float uProgress;
-                    float easeOutCubic(float t) { return 1.0 - pow(1.0 - t, 3.0); }
-                    void main() {
-                        vColor = color;
-                        float easedProgress = easeOutCubic(uProgress);
-                        vec3 currentPos = mix(initialPosition, position, easedProgress);
-                        if (easedProgress < 1.0) { float noise = sin(time * 3.0 + currentPos.y * 0.1) * (1.0 - easedProgress) * 10.0; currentPos.x += noise; }
-                        float wind = smoothstep(0.8, 1.0, easedProgress);
-                        currentPos.x += sin(time * 1.5 + currentPos.y * 0.05) * 0.5 * wind;
-                        vec4 mvPosition = modelViewMatrix * vec4(currentPos, 1.0);
-                        gl_PointSize = size * (500.0 / -mvPosition.z);
-                        gl_Position = projectionMatrix * mvPosition;
-                    }
-                `,
-                fragmentShader: `
-                    uniform sampler2D pointTexture; varying vec3 vColor;
-                    void main() { vec4 texColor = texture2D(pointTexture, gl_PointCoord); gl_FragColor = vec4(vColor, 1.0) * texColor; if (gl_FragColor.a < 0.05) discard; }
-                `,
+                vertexShader: `attribute float size; attribute vec3 color; attribute vec3 initialPosition; varying vec3 vColor; uniform float time; uniform float uProgress;
+                    void main() { vColor = color; float t = 1.0 - pow(1.0 - uProgress, 3.0); vec3 pos = mix(initialPosition, position, t);
+                    pos.x += sin(time * 1.5 + pos.y * 0.05) * 0.5 * smoothstep(0.8, 1.0, uProgress);
+                    vec4 mvPos = modelViewMatrix * vec4(pos, 1.0); gl_PointSize = size * (500.0 / -mvPos.z); gl_Position = projectionMatrix * mvPos; }`,
+                fragmentShader: `uniform sampler2D pointTexture; varying vec3 vColor; void main() { vec4 tex = texture2D(pointTexture, gl_PointCoord); gl_FragColor = vec4(vColor, 1.0) * tex; if (gl_FragColor.a < 0.05) discard; }`,
                 blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
             });
-            const tree = new THREE.Points(geometry, material);
-            tree.userData = { isTree: true };
-            contentGroup.add(tree);
+            const tree = new THREE.Points(geometry, material); tree.userData = { isTree: true }; contentGroup.add(tree);
         }
 
         function createHeart() {
-            const geometry = new THREE.BufferGeometry();
-            const positions = []; const colors = []; const colorObj = new THREE.Color();
+            const geometry = new THREE.BufferGeometry(); const positions = []; const colors = [];
             for (let i = 0; i < 1000; i++) {
-                const t = Math.random() * Math.PI * 2; const p = Math.random() * Math.PI; const scale = 0.7;
+                const t = Math.random() * Math.PI * 2; const p = Math.random() * Math.PI;
                 const x = 16 * Math.pow(Math.sin(t), 3) * Math.sin(p);
                 const y = (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * Math.sin(p);
-                const z = 9 * Math.cos(p);
-                positions.push(x * scale, y * scale, z * scale);
-                const mix = Math.random(); if (mix > 0.8) colorObj.setHSL(CONFIG.hueGold, 1.0, 0.6); else colorObj.setHSL(CONFIG.huePink, 1.0, 0.6);
-                colors.push(colorObj.r, colorObj.g, colorObj.b);
+                positions.push(x * 0.7, y * 0.7, 9 * Math.cos(p) * 0.7);
+                const c = new THREE.Color().setHSL(Math.random() > 0.8 ? CONFIG.hueGold : CONFIG.huePink, 1, 0.6);
+                colors.push(c.r, c.g, c.b);
             }
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            const material = new THREE.PointsMaterial({ size: 2.0, map: particleTexture, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 1.0 });
-            const heart = new THREE.Points(geometry, material);
-            heart.position.y = CONFIG.treeHeight / 2 + 5;
-            contentGroup.add(heart);
-            contentGroup.userData.heart = heart; 
+            const heart = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 2.0, map: particleTexture, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+            heart.position.y = CONFIG.treeHeight / 2 + 5; contentGroup.add(heart); contentGroup.userData.heart = heart;
         }
 
         function createBigRipples() {
-            const ringsGroup = new THREE.Group();
-            contentGroup.add(ringsGroup);
-            const numRings = 5; const startRadius = 80; const step = 40;
-            // Inner
-            const innerGeo = new THREE.BufferGeometry(); const innerPos = []; const innerCols = []; const innerCount = 20000;
-            for(let k=0; k<innerCount; k++) {
-                const r = Math.sqrt(Math.random()) * startRadius; const angle = Math.random() * Math.PI * 2;
-                const y = -CONFIG.treeHeight / 2 - 5 + (Math.random()-0.5) * 4.0;
-                innerPos.push(r*Math.cos(angle), y, r*Math.sin(angle));
-                const c = new THREE.Color().setHSL(0.96, 1.0, 0.4 + Math.random()*0.2); innerCols.push(c.r, c.g, c.b);
-            }
-            innerGeo.setAttribute('position', new THREE.Float32BufferAttribute(innerPos, 3)); innerGeo.setAttribute('color', new THREE.Float32BufferAttribute(innerCols, 3));
-            const innerMat = new THREE.PointsMaterial({ size: 0.8, vertexColors: true, map: particleTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.0, depthWrite: false });
-            const innerRing = new THREE.Points(innerGeo, innerMat); innerRing.userData = { rotationSpeed: 0.005, targetOpacity: 0.6, delay: 4.5 }; ringsGroup.add(innerRing);
-
-            // Rings
-            for (let i = 0; i < numRings; i++) {
-                const geometry = new THREE.BufferGeometry(); const positions = []; const colors = [];
-                const radius = startRadius + i * step;
-                const count = 30000 + i * 5000; const isEven = i % 2 === 0;
+            const ringsGroup = new THREE.Group(); contentGroup.add(ringsGroup);
+            const startRadius = 80;
+            for (let i = 0; i < 5; i++) {
+                const r = startRadius + i * 40; const count = 30000 + i * 5000;
+                const geo = new THREE.BufferGeometry(); const pos = []; const cols = [];
                 for (let j = 0; j < count; j++) {
-                    const angle = Math.random() * Math.PI * 2; const spread = 8 + i * 2; 
-                    const r = radius + (Math.random() - 0.5) * spread; const y = -CONFIG.treeHeight / 2 - 5;
-                    positions.push(r * Math.cos(angle), y, r * Math.sin(angle));
-                    const l = isEven ? 0.4 : 0.8; const c = new THREE.Color().setHSL(0.96, 1.0, l); colors.push(c.r, c.g, c.b);
+                    const angle = Math.random() * Math.PI * 2; const dist = r + (Math.random() - 0.5) * (8 + i * 2);
+                    pos.push(dist * Math.cos(angle), -CONFIG.treeHeight / 2 - 5, dist * Math.sin(angle));
+                    const c = new THREE.Color().setHSL(0.96, 1, i % 2 === 0 ? 0.4 : 0.8); cols.push(c.r, c.g, c.b);
                 }
-                const gapCount = 10000 + i * 2000; const gapRadius = radius + step / 2;
-                for (let k = 0; k < gapCount; k++) {
-                     const angle = Math.random() * Math.PI * 2; const r = gapRadius + (Math.random() - 0.5) * (step * 0.9);
-                     const y = -CONFIG.treeHeight / 2 - 5 + (Math.random() - 0.5) * 5.0;
-                     positions.push(r * Math.cos(angle), y, r * Math.sin(angle));
-                     const c = new THREE.Color().setHSL(0.96, 0.8, 0.3); colors.push(c.r, c.g, c.b);
-                }
-                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-                const mat = new THREE.PointsMaterial({ size: 0.8, vertexColors: true, map: particleTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.0, depthWrite: false });
-                const ring = new THREE.Points(geometry, mat);
-                const inverseI = (numRings - 1) - i;
-                ring.userData = { rotationSpeed: isEven ? 0.01 : -0.01, targetOpacity: 0.6, delay: inverseI * 0.8 }; ringsGroup.add(ring);
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+                const ring = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.8, vertexColors: true, map: particleTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false }));
+                ring.userData = { rotationSpeed: i % 2 === 0 ? 0.01 : -0.01, targetOpacity: 0.6, delay: (4 - i) * 0.8 }; ringsGroup.add(ring);
             }
             contentGroup.userData.rings = ringsGroup;
         }
 
         function createBackgroundDust() {
-            const geometry = new THREE.BufferGeometry(); const positions = []; const colors = [];
-            for(let i=0; i<30000; i++) {
-                const r = Math.random() * 450; const theta = Math.random() * Math.PI * 2; const y = (Math.random() - 0.5) * 250;
-                positions.push(r * Math.cos(theta), y, r * Math.sin(theta));
-                const c = new THREE.Color().setHSL(0.95, 0.5, 0.3); colors.push(c.r, c.g, c.b);
+            const geo = new THREE.BufferGeometry(); const pos = []; const cols = [];
+            for (let i = 0; i < 30000; i++) {
+                const r = Math.random() * 450; const theta = Math.random() * Math.PI * 2;
+                pos.push(r * Math.cos(theta), (Math.random() - 0.5) * 250, r * Math.sin(theta));
+                const c = new THREE.Color().setHSL(0.95, 0.5, 0.3); cols.push(c.r, c.g, c.b);
             }
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            const mat = new THREE.PointsMaterial({ size: 0.5, vertexColors: true, map: particleTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.3, depthWrite: false });
-            const dust = new THREE.Points(geometry, mat); contentGroup.add(dust);
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+            contentGroup.add(new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.5, vertexColors: true, map: particleTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.3, depthWrite: false })));
+        }
+
+        function createFallingSnow() {
+            const geo = new THREE.BufferGeometry(); const pos = []; const vels = [];
+            for (let i = 0; i < CONFIG.snowCount; i++) {
+                pos.push((Math.random() - 0.5) * CONFIG.snowRange, (Math.random() - 0.5) * CONFIG.snowRange, (Math.random() - 0.5) * CONFIG.snowRange);
+                vels.push(0.2 + Math.random() * 0.6);
+            }
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('velocity', new THREE.Float32BufferAttribute(vels, 1));
+            snowSystem = new THREE.Points(geo, new THREE.PointsMaterial({ size: 3.5, map: snowflakeTexture, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
+            scene.add(snowSystem);
         }
 
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight);
-            calculateLayoutTargets(); 
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+            calculateLayoutTargets();
         }
 
         function animate() {
             requestAnimationFrame(animate);
             const time = clock.getElapsedTime();
-            
-            // Camera Logic
+
+            // Nhạc tự động phát
+            if (!musicStarted && time >= CONFIG.treeStartTimeOffset) {
+                music.play().catch(e => console.log("Music blocked"));
+                musicStarted = true;
+            }
+
             if (time < CONFIG.introDuration) {
-                const lerpSpeed = 0.02;
-                camera.position.lerp(targetCamPos, lerpSpeed);
-                controls.target.lerp(targetLookAt, lerpSpeed);
-                controls.update(); 
+                const lerpSpeed = 0.02; camera.position.lerp(targetCamPos, lerpSpeed);
+                controls.target.lerp(targetLookAt, lerpSpeed); controls.update();
             } else if (!isIntroFinished) {
-                isIntroFinished = true;
-                controls.enabled = true; 
+                isIntroFinished = true; controls.enabled = true;
             } else {
                 controls.update();
             }
 
-            // [NEW] ANIMATE SNOW
             if (snowSystem) {
-                const positions = snowSystem.geometry.attributes.position.array;
-                const velocities = snowSystem.geometry.attributes.velocity.array;
-                const range = CONFIG.snowRange;
-
+                const pos = snowSystem.geometry.attributes.position.array;
+                const vels = snowSystem.geometry.attributes.velocity.array;
                 for (let i = 0; i < CONFIG.snowCount; i++) {
-                    const i3 = i * 3;
-                    
-                    // Rơi xuống theo tốc độ riêng
-                    positions[i3 + 1] -= velocities[i];
-
-                    // Gió thổi ngang nhẹ
-                    positions[i3] += Math.sin(time * 0.5 + i) * 0.1;
-                    positions[i3 + 2] += Math.cos(time * 0.3 + i) * 0.1;
-
-                    // Nếu rơi quá thấp thì reset lên trên
-                    if (positions[i3 + 1] < -range/2) {
-                        positions[i3 + 1] = range/2;
-                        // Reset vị trí X, Z ngẫu nhiên để tuyết trông tự nhiên, không lặp lại y hệt
-                        positions[i3] = (Math.random() - 0.5) * range;
-                        positions[i3 + 2] = (Math.random() - 0.5) * range;
-                    }
+                    const i3 = i * 3; pos[i3 + 1] -= vels[i];
+                    if (pos[i3 + 1] < -CONFIG.snowRange / 2) pos[i3 + 1] = CONFIG.snowRange / 2;
                 }
                 snowSystem.geometry.attributes.position.needsUpdate = true;
-                // Tuyết xoay nhẹ cả khối để thêm sinh động
                 snowSystem.rotation.y = time * 0.05;
             }
 
-            // Rings
             if (contentGroup.userData.rings) {
                 contentGroup.userData.rings.children.forEach(ring => {
                     ring.rotation.y = time * ring.userData.rotationSpeed;
-                    if (time > ring.userData.delay) {
-                        const age = time - ring.userData.delay; ring.material.opacity = Math.min(age * 0.5, 1.0) * ring.userData.targetOpacity;
-                    }
+                    if (time > ring.userData.delay) ring.material.opacity = Math.min((time - ring.userData.delay) * 0.5, 1.0) * ring.userData.targetOpacity;
                 });
             }
 
-            // Tree & Text
             if (time > CONFIG.treeStartTimeOffset) {
                 const progress = Math.min((time - CONFIG.treeStartTimeOffset) / CONFIG.treeCoalesceSpeed, 1.0);
                 contentGroup.children.forEach(child => {
@@ -505,17 +441,10 @@
 
                 if (progress > 0.8) {
                     const baseOpacity = (progress - 0.8) / 0.2;
-                    if (textGroup) {
-                        textGroup.children.forEach(child => {
-                            if (child.userData.isTitle) {
-                                child.material.opacity = baseOpacity;
-                            }
-                        });
-                    }
+                    textGroup.children.forEach(child => { if (child.userData.isTitle) child.material.opacity = baseOpacity; });
 
                     if (activeSubtitles.length === 0 && currentSubtitleIndex === 0 && time - lastSubtitleSwitchTime > 1.0) {
-                        spawnSubtitle(CONFIG.subtitles[0]);
-                        lastSubtitleSwitchTime = time;
+                        spawnSubtitle(CONFIG.subtitles[0]); lastSubtitleSwitchTime = time;
                     }
 
                     if (time - lastSubtitleSwitchTime > CONFIG.subtitleSwitchTime) {
@@ -527,28 +456,20 @@
                     }
 
                     for (let i = activeSubtitles.length - 1; i >= 0; i--) {
-                        const item = activeSubtitles[i];
-                        const mesh = item.mesh;
+                        const item = activeSubtitles[i]; const mesh = item.mesh;
                         if (item.state === 'entering') {
-                            mesh.position.y += (0 - mesh.position.y) * 0.05;
-                            mesh.material.opacity += (1 - mesh.material.opacity) * 0.05;
+                            mesh.position.y += (-25 - mesh.position.y) * 0.05; mesh.material.opacity += (1 - mesh.material.opacity) * 0.05;
                         } else if (item.state === 'exiting') {
-                            mesh.position.y += 0.15; 
-                            mesh.material.opacity -= 0.03; 
-                            if (mesh.material.opacity <= 0) {
-                                subtitleGroup.remove(mesh);
-                                activeSubtitles.splice(i, 1);
-                            }
+                            mesh.position.y += 0.15; mesh.material.opacity -= 0.03;
+                            if (mesh.material.opacity <= 0) { subtitleGroup.remove(mesh); activeSubtitles.splice(i, 1); }
                         }
                     }
                 }
             }
 
             if (contentGroup.userData.heart) {
-                const s = 1 + Math.sin(time * 3) * 0.1;
-                contentGroup.userData.heart.scale.set(s, s, s);
+                const s = 1 + Math.sin(time * 3) * 0.1; contentGroup.userData.heart.scale.set(s, s, s);
             }
-
             composer.render();
         }
     </script>
